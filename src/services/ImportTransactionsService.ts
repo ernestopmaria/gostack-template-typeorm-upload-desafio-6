@@ -22,8 +22,9 @@ class ImportTransactionsService {
     const parsers =csvParse({
       from_line: 2,
      });
+
      const parseCSV = contactsReadStream.pipe(parsers);
-     const transactions: CSVTransactions[] =[];
+     const transactions: CSVTransactions[] = [];
      const categories:string[] = [];
 
      parseCSV.on('data' , async line=>{
@@ -44,11 +45,37 @@ class ImportTransactionsService {
        title: In(categories),
        },
      });
-     //const existentCategoriesTitles = existentCategories.map((category:Category)=>category.title)
+     const existentCategoriesTitles = existentCategories.map((category:Category)=>category.title);
 
-     console.log(existentCategories);
-     console.log(categories);
+     const addCategoryTitles = categories.filter(
+       category=>!existentCategoriesTitles.includes(category),
+     ).filter((value, index, self)=>self.indexOf(value)=== index);
 
+     const newCategories = categoriesRepository.create(
+       addCategoryTitles.map(title =>({
+         title,
+       })),
+     );
+
+       await categoriesRepository.save(newCategories);
+
+       const finalCategories = [...newCategories, ...existentCategories];
+
+       const createdTransactions = transactionRepository.create(
+         transactions.map(transaction =>(
+            {
+              title: transaction.title,
+              type: transaction.type,
+              value: transaction.value,
+              category :finalCategories.find(
+                category=>category.title === transaction.category
+              ),
+            })),
+       );
+       await transactionRepository.save(createdTransactions);
+       await fs.promises.unlink(filePath);
+
+       return createdTransactions;
 
 
   }
